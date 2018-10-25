@@ -1,0 +1,917 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
+/* @author Shobhit Srivastava  18 September 2018
+ * The sample smart contract for jioDealerManagement
+ *
+ */
+
+package main
+
+/* Imports
+ * 4 utility libraries for formatting, handling bytes, reading and writing JSON, and string manipulation
+ * 2 specific Hyperledger Fabric specific libraries for Smart Contracts
+ */
+import (
+ "encoding/json"
+  "github.com/hyperledger/fabric/core/chaincode/shim"
+  sc "github.com/hyperledger/fabric/protos/peer"
+  "fmt"
+  "strconv"
+  "time"
+  "bytes"
+  "strings"
+)
+
+
+const TX_KEY = "TX_KEY"
+const SC_KEY = "SC_KEY"
+
+// Define the Smart Contract structure
+type SmartContract struct {
+}
+/*
+ * The Init method is called when the Smart Contract "jio dealerManagement" is instantiated by the blockchain network
+ * Best practice is to have any Ledger initialization in separate function -- see initLedger()
+ */
+func (s *SmartContract) Init(APIstub shim.ChaincodeStubInterface) sc.Response {
+  fmt.Println("jioDealerManagement chaincode initalized ")
+  APIstub.PutState(TX_KEY, []byte("0"))
+  APIstub.PutState(SC_KEY, []byte("0"))
+   
+  return shim.Success(nil)
+}
+
+
+/*
+ * The Invoke method is called as a result of an application request to run the Smart Contract "fabcar"
+ * The calling application program has also specified the particular smart contract function to be called, with arguments
+ */
+func (s *SmartContract) Invoke(APIstub shim.ChaincodeStubInterface) sc.Response {
+
+  // Retrieve the requested Smart Contract function and arguments
+  function, args := APIstub.GetFunctionAndParameters()
+  // Route to the appropriate handler function to interact with the ledger appropriately
+
+    
+     	
+  return shim.Error("Invalid Smart Contract function name.")
+}
+
+
+
+/*
+ *testMethod
+ */
+func (s *SmartContract) insertTest(APIstub shim.ChaincodeStubInterface, args []string) sc.Response {
+   
+  err := APIstub.PutState(args[0],  []byte(args[1]))
+	if err != nil {
+		return shim.Error(err.Error())
+	}
+  
+    return shim.Success(nil)
+}
+
+/*
+ *This method is for creating sale transaction
+ */
+func (s *SmartContract) recordTransaction(APIstub shim.ChaincodeStubInterface , args []string) sc.Response {
+     
+     if len(args) < 1 {
+     	 return shim.Error("No argument supplied for recording transaction")
+     	 
+     }
+     
+     txKeyByte,_:= APIstub.GetState(TX_KEY)
+     var txRecord map[string]string
+     
+     if(txKeyByte  == nil){
+      return shim.Error("Error occured")
+    }
+   tx_number, _:= strconv.Atoi((string)(txKeyByte))  
+   tx_number = tx_number + 1
+   
+   tx_numberString := strconv.Itoa(tx_number)
+ 
+  APIstub.PutState(TX_KEY, []byte(tx_numberString))
+
+  payload := args[0]
+  json.Unmarshal([]byte(payload), &txRecord)
+  const TX_Variable = "Tx"
+  fmt.Println("new Payload is " + payload)
+  txRecord["TxId"] = TX_Variable + tx_numberString
+ 
+  txRecord["status"] = "TXCreated"
+  txRecord["commissionSettlement"] = "False"
+
+  	now := time.Now()
+	secs := now.Unix()
+	txcreatedTime:= strconv.Itoa(int(secs))
+  txRecord["txCreatedTime"] =txcreatedTime
+  //to do validation if any in future
+  tx,_ := json.Marshal(txRecord)
+  
+  APIstub.PutState(TX_Variable + tx_numberString, tx )
+  return shim.Success([]byte(TX_Variable + tx_numberString))
+   
+}
+
+/*
+ *This method is for computing commission
+ */
+func (s *SmartContract) computeComission(APIstub shim.ChaincodeStubInterface , args []string) sc.Response {
+     
+     if len(args) < 3  {
+     	 return shim.Error("3 arguments required for computing commission")
+     	 
+     }
+     
+     txKeyByte,_:= APIstub.GetState(args[0])
+     if txKeyByte == nil {
+      return shim.Error("Error occured")
+     } 
+      var txRecord map[string]string
+      json.Unmarshal(txKeyByte , &txRecord)
+     if args[1]=="Percentage" {
+        saleAmount, _:= strconv.Atoi(txRecord["saleAmount"])  
+        commissionPer,_:= strconv.ParseFloat(args[2], 32)
+        
+  		 cmsn:= (float64(commissionPer)/float64(100)) * float64(saleAmount)
+  		value :=	fmt.Sprintf("%.2f", cmsn)
+  		txRecord["commission"] = value
+  		} else{
+  		txRecord["commission"] = args[2]
+  		}
+  		txRecord["commissionSettlement"] = "True"
+		  
+  tx,_ := json.Marshal(txRecord) 
+  APIstub.PutState(args[0], tx )
+  return shim.Success([]byte("Success"))
+   
+}
+
+
+func (s *SmartContract) initPairLedgerAP(APIstub shim.ChaincodeStubInterface) sc.Response {
+  
+  demoa := "{\"productOffering\":\"Connectivity\",\"serviceOffering\":\"5G\",\"servicePlan_SKU\":\"LTE\",\"planStatus\":\"Active\",\"planCircle\":\"South\",\"planID\":\"p1\",\"planVersion\":\"1\",\"mrp\":\"343\",\"saleAmount\":\"340\",\"oldDeviceBrand\":\"null\",\"oldDeviceType\":\"null\"}"
+   demob := "{\"productOffering\":\"Connectivity\",\"serviceOffering\":\"5G\",\"servicePlan_SKU\":\"LTE\",\"planStatus\":\"Active\",\"planCircle\":\"South\",\"planID\":\"p2\",\"planVersion\":\"1\",\"mrp\":\"343\",\"saleAmount\":\"340\",\"oldDeviceBrand\":\"null\",\"oldDeviceType\":\"null\"}"
+  
+   APIstub.PutState("p1", []byte(demoa))
+   APIstub.PutState("p2", []byte(demob))
+  
+  return shim.Success(nil)
+}
+
+/*
+ *This method is for validateDealer data in jioadchannel
+ */
+func (s *SmartContract) validateDealer(args []string, APIstub shim.ChaincodeStubInterface) sc.Response {
+
+fmt.Println("new payload:" + args[0])
+
+	var dealer map[string]string
+	var payload map[string]string	
+	json.Unmarshal([]byte(args[0]), &payload)
+	 dealerByte, _ := APIstub.GetState(payload["dealerId"])
+	 fmt.Println(string(dealerByte))
+	 if dealerByte == nil {
+	return shim.Success([]byte("False"))
+	 fmt.Println("Error ocurred")
+	 }else{
+	 
+	 json.Unmarshal(dealerByte , &dealer)
+	 if dealer["dealerStatus"] == "Active" {
+	 fmt.Println("Passed")
+	 return shim.Success([]byte("True"))
+	 }
+	 
+	} 
+	return shim.Success([]byte("False"))
+}
+
+
+
+/*
+ *This method return all data
+ */
+func (s* SmartContract) getData(args []string, APIstub shim.ChaincodeStubInterface) sc.Response {
+
+	if len(args) < 1 {
+		return shim.Error("1 is required")
+	}
+	
+	
+	 query := "{\"selector\":{\"dealerId\":\""+args[0]+"\"}}"
+	 
+	 var rodata []map[string]string
+		
+	fmt.Printf("- getAllDataForaDealer qyery is:\n%s\n", query)
+	
+	resultsIterator, err := APIstub.GetQueryResult(query)
+	if err != nil {
+		return shim.Error("Error occurred")
+	}
+	if resultsIterator == nil {
+		return shim.Error("No record found")
+	}
+	
+	var  totalCommision float64
+	var simActivation, recharge , deviceSale, deviceExchange , saleAmount_number int
+	
+	defer resultsIterator.Close()
+
+	// buffer is a JSON array containing QueryRecords
+	var buffer bytes.Buffer
+	buffer.WriteString("[")
+	bArrayMemberAlreadyWritten := false
+	rodata = make([]map[string]string, 0)
+	for resultsIterator.HasNext() {
+		
+		queryResponse, err := resultsIterator.Next()
+		if err != nil {
+			return  shim.Error("No more record ")
+		}
+		// Add a comma before array members, suppress it for the first array member
+		if bArrayMemberAlreadyWritten == true {
+			buffer.WriteString(",")
+		}
+		buffer.WriteString("{\"Key\":")
+		buffer.WriteString("\"")
+		buffer.WriteString(queryResponse.Key)
+		buffer.WriteString("\"")
+
+		buffer.WriteString(", \"Record\":")
+		var record map[string]string
+		jsonData := queryResponse.Value
+		json.Unmarshal(jsonData, &record)
+			saleAmount_numberValue, _:= strconv.Atoi(record["saleAmount"])  
+		saleAmount_number = saleAmount_number + saleAmount_numberValue
+		
+		totalCommisionValue,_:= strconv.ParseFloat(record["commission"], 32); 
+		totalCommision = totalCommision + totalCommisionValue 
+		
+		if record["saleType"]=="Recharge"{		
+		recharge++
+		} else if record["saleType"]=="SimActivation" {
+		simActivation++
+		} else if record["saleType"]=="DeviceSale" {
+		deviceSale++
+		} else if record["saleType"]=="DeviceExchange" {
+			deviceExchange++
+		}
+		
+		
+		
+		rodata = append(rodata, record)
+
+		// Record is a JSON object, so we write as-is
+		buffer.WriteString(string(jsonData))
+		buffer.WriteString("}")
+		bArrayMemberAlreadyWritten = true
+	}
+	if !bArrayMemberAlreadyWritten {
+		buffer.WriteString("No record found")
+	}
+	buffer.WriteString("]")
+	 roNewData := make( map[string]string)
+	
+	
+	roNewData["totalSale"] = strconv.Itoa(saleAmount_number)
+	commisionString := fmt.Sprintf("%.2f", totalCommision)
+	roNewData["totalCommision"] = commisionString
+	roNewData["recharge"] = strconv.Itoa(recharge)
+	roNewData["simActivation"] = strconv.Itoa(simActivation)
+	roNewData["deviceExchange"] = strconv.Itoa(deviceExchange)
+	roNewData["deviceSale"] = strconv.Itoa(deviceSale)
+	fmt.Printf("- getAllDataForaDealer", rodata)
+	rodata = append(rodata, roNewData)
+	roByte,_ := json.Marshal(rodata)
+	
+		return shim.Success(roByte)
+}
+
+
+/*
+ *This method return the all records for particular type of record
+ */
+func (s* SmartContract) getAllRecordType( APIstub shim.ChaincodeStubInterface , args []string) sc.Response {
+
+	if len(args) < 1 {
+		return shim.Error("1 is required")
+	 }
+	 query := "{\"selector\":{\"recordType\":\""+args[0]+"\"}}"
+	 var rodata []map[string]string
+		
+	fmt.Printf("- getAllRecordType qyery is:\n%s\n", query)
+	
+	resultsIterator, err := APIstub.GetQueryResult(query)
+	if err != nil {
+		return shim.Error("Error occurred")
+	}
+	if resultsIterator == nil {
+		return shim.Error("No record found")
+	}
+	defer resultsIterator.Close()
+
+	// buffer is a JSON array containing QueryRecords
+	var buffer bytes.Buffer
+	buffer.WriteString("[")
+	bArrayMemberAlreadyWritten := false
+	rodata = make([]map[string]string, 0)
+	for resultsIterator.HasNext() {
+		
+		queryResponse, err := resultsIterator.Next()
+		if err != nil {
+			return  shim.Error("No more record ")
+		}
+		// Add a comma before array members, suppress it for the first array member
+		if bArrayMemberAlreadyWritten == true {
+			buffer.WriteString(",")
+		}
+		buffer.WriteString("{\"Key\":")
+		buffer.WriteString("\"")
+		buffer.WriteString(queryResponse.Key)
+		buffer.WriteString("\"")
+
+		buffer.WriteString(", \"Record\":")
+		var record map[string]string
+		jsonData := queryResponse.Value
+		json.Unmarshal(jsonData, &record)
+		rodata = append(rodata, record)
+
+		// Record is a JSON object, so we write as-is
+		buffer.WriteString(string(jsonData))
+		buffer.WriteString("}")
+		bArrayMemberAlreadyWritten = true
+	}
+	if !bArrayMemberAlreadyWritten {
+		buffer.WriteString("No record found")
+	}
+	buffer.WriteString("]")
+	roByte,_ := json.Marshal(rodata)
+	fmt.Printf("- getAllRecordType queryResult:\n%s\n", string(roByte))
+	return shim.Success(roByte)
+
+}
+
+
+/*
+ *This method return the dealer dashboard data for a dealerId for a particular time duration
+ */
+func (s* SmartContract) getDataForDealerDuration(args []string, APIstub shim.ChaincodeStubInterface) sc.Response {
+
+	var query string
+	
+	if len(args) < 3 {
+		return shim.Error("3 arguments are required")
+	}else if len(args) == 3 {
+	 query = "{\"selector\":{\"$and\":[{\"dealerId\":{\"$eq\":\""+args[0]+"\"}},{\"txCreatedTime\":{\"$gte\":\""+args[1]+"\"}},{\"txCreatedTime\":{\"$lte\":\""+args[2]+"\"}}]}}"
+	
+	}else if len(args) == 4 {
+	 query = "{\"selector\":{\"$and\":[{\"dealerId\":{\"$eq\":\""+args[0]+"\"}},{\"commissionType\":{\"$eq\":\""+args[1]+"\"},{\"txCreatedTime\":{\"$gte\":\""+args[2]+"\"}},{\"txCreatedTime\":{\"$lte\":\""+args[3]+"\"}}]}}"
+	
+	}
+	
+	
+	 
+	 var rodata []map[string]string
+		
+	fmt.Printf("- getDataForDealerDuration qyery is:\n%s\n", query)
+	
+	resultsIterator, err := APIstub.GetQueryResult(query)
+	if err != nil {
+		return shim.Error("Error occurred")
+	}
+	if resultsIterator == nil {
+		return shim.Error("No record found")
+	}
+	
+	var  totalCommision float64
+	var simActivation, recharge , deviceSale, deviceExchange , saleAmount_number int
+	
+	defer resultsIterator.Close()
+
+	// buffer is a JSON array containing QueryRecords
+	var buffer bytes.Buffer
+	buffer.WriteString("[")
+	bArrayMemberAlreadyWritten := false
+	rodata = make([]map[string]string, 0)
+	for resultsIterator.HasNext() {
+		
+		queryResponse, err := resultsIterator.Next()
+		if err != nil {
+			return  shim.Error("No more record ")
+		}
+		// Add a comma before array members, suppress it for the first array member
+		if bArrayMemberAlreadyWritten == true {
+			buffer.WriteString(",")
+		}
+		buffer.WriteString("{\"Key\":")
+		buffer.WriteString("\"")
+		buffer.WriteString(queryResponse.Key)
+		buffer.WriteString("\"")
+
+		buffer.WriteString(", \"Record\":")
+		var record map[string]string
+		jsonData := queryResponse.Value
+		json.Unmarshal(jsonData, &record)
+		
+		saleAmount_numberValue, _:= strconv.Atoi(record["saleAmount"])  
+		saleAmount_number = saleAmount_number + saleAmount_numberValue
+		
+		totalCommisionValue,_:= strconv.ParseFloat(record["commission"], 32); 
+		totalCommision = totalCommision + totalCommisionValue 
+		
+		if record["saleType"]=="Recharge"{		
+		recharge++
+		fmt.Printf("here in recharge"+ strconv.Itoa(recharge))
+		} else if record["saleType"]=="SimActivation" {
+		simActivation++
+		} else if record["saleType"]=="DeviceSale" {
+		deviceSale++
+		} else if record["saleType"]=="DeviceExchange" {
+			deviceExchange++
+		}
+		
+		
+		
+		rodata = append(rodata, record)
+
+		// Record is a JSON object, so we write as-is
+		buffer.WriteString(string(jsonData))
+		buffer.WriteString("}")
+		bArrayMemberAlreadyWritten = true
+	}
+	if !bArrayMemberAlreadyWritten {
+		buffer.WriteString("No record found")
+	}
+	buffer.WriteString("]")
+	 roNewData := make( map[string]string)
+	
+	
+	roNewData["totalSale"] = strconv.Itoa(saleAmount_number)
+	commisionString := fmt.Sprintf("%.2f", totalCommision)
+	roNewData["totalCommision"] = commisionString
+	roNewData["recharge"] = strconv.Itoa(recharge)
+	roNewData["simActivation"] = strconv.Itoa(simActivation)
+	roNewData["deviceExchange"] = strconv.Itoa(deviceExchange)
+	roNewData["deviceSale"] = strconv.Itoa(deviceSale)
+	fmt.Printf("- getAllDataForaDealer", rodata)
+	rodata = append(rodata, roNewData)
+	roByte,_ := json.Marshal(rodata)
+	
+	fmt.Printf("- getDataForDealerDuration queryResult:\n%s\n", string(roByte))
+	return shim.Success(roByte)
+}
+
+/*
+ *This method is for creating scheme
+ */
+func (s *SmartContract) createScheme(args []string , APIstub shim.ChaincodeStubInterface) sc.Response {
+     
+     if len(args) < 1 {
+     	 return shim.Error("No argument supplied for recording transaction")
+     	 
+     }
+     
+     scKeyByte,_:= APIstub.GetState(SC_KEY)
+     var scRecord map[string]interface{}
+     
+     if(scKeyByte  == nil){
+      return shim.Error("Error occured")
+    }
+   sc_number, _:= strconv.Atoi((string)(scKeyByte))  
+   sc_number = sc_number + 1
+   
+   sc_numberString := strconv.Itoa(sc_number)
+ 
+  APIstub.PutState(SC_KEY, []byte(sc_numberString))
+
+  payload := args[0]
+  fmt.Println("- createScheme", payload)
+  json.Unmarshal([]byte(payload), &scRecord)
+  const SC_Variable = "Sc"
+ 
+  scRecord["ScId"] = SC_Variable + sc_numberString
+ fmt.Println("- createScheme commission payload", scRecord["commision"])
+ 	
+  	now := time.Now()
+	secs := now.Unix()
+	txcreatedTime:= strconv.Itoa(int(secs))
+  scRecord["createdTime"] =txcreatedTime
+  //to do validation if any in future
+
+  sc,_ := json.Marshal(scRecord)
+  
+  APIstub.PutState(SC_Variable + sc_numberString, sc )
+  return shim.Success([]byte(SC_Variable + sc_numberString))
+   
+}
+
+/*
+ *This method return the commission value for a particular commissiontype and dealerType
+ */
+func (s *SmartContract) getCommisionValue(args []string, APIstub shim.ChaincodeStubInterface ) sc.Response {
+
+		var sc map[string]interface{}
+		scByte,_:= APIstub.GetState(args[0])
+		if scByte == nil {
+		return shim.Error("no scheme")
+		}
+		 fmt.Sprintf("%s", scByte)
+		json.Unmarshal(scByte, &sc)
+		
+		 fmt.Println("- getCommisionValue commission payload", sc["commision"])
+		var co map[string]interface {}
+		co=sc["commision"].(map[string]interface {})
+		 
+		
+		 
+		 fmt.Println("- getCommisionValue commission value is", co["Value"])
+		   return shim.Success([]byte("Correct"))
+   
+}
+
+/*
+ *This method return the dealerType
+ */
+func (s *SmartContract) getDealerType(args []string, APIstub shim.ChaincodeStubInterface ) sc.Response {
+
+		if len(args) < 1 {
+     	 return shim.Error("No argument supplied for getting dealerType")
+     	 
+     }
+		var sc map[string]string
+		scByte,_:= APIstub.GetState(args[0])
+		if scByte == nil {
+		return shim.Error("no scheme")
+		}
+		json.Unmarshal(scByte, &sc)
+		
+		 fmt.Println("- getDealerType ", sc["dealerType"])
+		return shim.Success([]byte(sc["dealerType"]))
+   
+}
+
+/*
+ *This method return the record details
+ */
+func (s *SmartContract) getRecord( APIstub shim.ChaincodeStubInterface, args []string ) sc.Response {
+
+		if len(args) < 1 {
+     	 return shim.Error("No argument supplied for getting record")
+     	 
+     }
+		var sc map[string]interface{}
+		scByte,_:= APIstub.GetState(args[0])
+		if scByte == nil {
+		return shim.Error("no record")
+		}
+		json.Unmarshal(scByte, &sc)
+		
+		
+		return shim.Success(scByte)
+   
+}
+
+/*
+ *This method return the dealer commission details depending upon dealerType and saleType
+ */
+func (s *SmartContract) getDealerCommissionDetails(args []string, APIstub shim.ChaincodeStubInterface ) sc.Response {
+
+
+	if len(args) < 2 {
+		return shim.Error("2 parameters are required")
+	}
+		 query := "{\"selector\":{\"schemeTypeValue\":\""+args[0]+"\"}}"
+		
+		
+		fmt.Printf("- getDealerCommissionDetails qyery is:\n%s\n", query)
+		
+		 resultsIterator, err := APIstub.GetQueryResult(query)
+	if err != nil {
+		return shim.Error("Error occurred")
+	}
+	if resultsIterator == nil {
+		return shim.Error("No record found")
+	}
+		
+		
+		defer resultsIterator.Close()
+		
+		var buffer bytes.Buffer
+	
+	buffer.WriteString("[")
+	bArrayMemberAlreadyWritten := false
+	
+	for resultsIterator.HasNext() {
+		
+		queryResponse, err := resultsIterator.Next()
+		if err != nil {
+			return  shim.Error("No more record ")
+		}
+		// Add a comma before array members, suppress it for the first array member
+		if bArrayMemberAlreadyWritten == true {
+			buffer.WriteString(",")
+		}
+		buffer.WriteString("{\"Key\":")
+		buffer.WriteString("\"")
+		buffer.WriteString(queryResponse.Key)
+		fmt.Printf("- getDealerCommissionDetails key is:\n%s\n", queryResponse.Key)
+		buffer.WriteString("\"")
+
+		buffer.WriteString(", \"Record\":")
+		
+		
+		var co map[string]interface {}
+		jsonData := queryResponse.Value
+		json.Unmarshal(jsonData, &co)
+		fmt.Println("getCommisionDetails dealerType: \n%s\n", co["dealerType"].(string)) 
+		data := strings.Split(co["dealerType"].(string), ",")
+		for _,key :=range data {
+		if(key==args[1]) {
+		fmt.Println("getCommisionDetails co commission json is: \n%s\n", co["commision"]) 
+		var sch map[string]interface {}
+		sch=co["commision"].(map[string]interface {})
+		fmt.Println("getCommisionDetails calculationBasis is: \n%s", sch["calculationBasis"]) 
+			fmt.Println("getCommisionDetails value is: \n%s\n", sch["value"]) 
+		calculationBasis:= fmt.Sprintf("%v", sch["calculationBasis"]) 
+		value:= fmt.Sprintf("%v",sch["value"])
+		scheme:="{\"calculationBasis\":\""+calculationBasis+"\",\"value\":\""+value+"\"}"
+		return shim.Success([]byte(scheme))
+		}
+		}
+		}
+		return shim.Success([]byte("No scheme"))	
+		
+}
+		
+
+func (s *SmartContract) getIncentiveDetailsDealer(args []string,  APIstub shim.ChaincodeStubInterface) sc.Response{
+	
+	var query string
+	if len(args) < 4{
+		return shim.Error("4 parameters are required")
+	}
+	 
+	 query = "{\"selector\":{\"$and\":[{\"dealerId\":{\"$eq\":\""+args[0]+"\"}},{\"commissionType\":{\"$eq\":\""+args[1]+"\"},{\"txCreatedTime\":{\"$gte\":\""+args[2]+"\"}},{\"txCreatedTime\":{\"$lte\":\""+args[3]+"\"}}]}}"
+	
+		 var rodata []map[string]string
+		
+	fmt.Printf("- getIncentiveDetailsDealer qyery is:\n%s\n", query)
+	
+	resultsIterator, err := APIstub.GetQueryResult(query)
+	if err != nil {
+		return shim.Error("Error occurred")
+	}
+	if resultsIterator == nil {
+		return shim.Error("No record found")
+	}
+	
+	var  totalCommision float64
+	var  saleAmount_number int
+	
+	defer resultsIterator.Close()
+
+	// buffer is a JSON array containing QueryRecords
+	var buffer bytes.Buffer
+	buffer.WriteString("[")
+	bArrayMemberAlreadyWritten := false
+	rodata = make([]map[string]string, 0)
+	for resultsIterator.HasNext() {
+		
+		queryResponse, err := resultsIterator.Next()
+		if err != nil {
+			return  shim.Error("No more record ")
+		}
+		// Add a comma before array members, suppress it for the first array member
+		if bArrayMemberAlreadyWritten == true {
+			buffer.WriteString(",")
+		}
+		buffer.WriteString("{\"Key\":")
+		buffer.WriteString("\"")
+		buffer.WriteString(queryResponse.Key)
+		buffer.WriteString("\"")
+
+		buffer.WriteString(", \"Record\":")
+		var record map[string]string
+		jsonData := queryResponse.Value
+		json.Unmarshal(jsonData, &record)
+		
+		saleAmount_numberValue, _:= strconv.Atoi(record["saleAmount"])  
+		saleAmount_number = saleAmount_number + saleAmount_numberValue
+		
+		totalCommisionValue,_:= strconv.ParseFloat(record["commission"], 32); 
+		totalCommision = totalCommision + totalCommisionValue 
+		
+		
+		
+		rodata = append(rodata, record)
+
+		// Record is a JSON object, so we write as-is
+		buffer.WriteString(string(jsonData))
+		buffer.WriteString("}")
+		bArrayMemberAlreadyWritten = true
+	}
+	if !bArrayMemberAlreadyWritten {
+		buffer.WriteString("No record found")
+	}
+	buffer.WriteString("]")
+	 roNewData := make( map[string]string)
+	
+	
+	roNewData["totalSale"] = strconv.Itoa(saleAmount_number)
+	commisionString := fmt.Sprintf("%.2f", totalCommision)
+	roNewData["totalCommision"] = commisionString
+	fmt.Printf("- getAllDataForaDealer", rodata)
+	rodata = append(rodata, roNewData)
+	roByte,_ := json.Marshal(rodata)
+	//now to check incentive type
+	
+		
+	fmt.Printf("- giveIncentiveToDealer queryResult:\n%s\n", string(roByte))
+	return shim.Success(roByte)
+
+
+}
+
+func (s *SmartContract) computeIncentiveDealer(args []string,  APIstub shim.ChaincodeStubInterface) sc.Response{
+
+	var scheme string
+	if len(args) < 4 {
+		return shim.Error("4 parameters are required")
+	}
+		 query := "{\"selector\":{\"schemeType\":\""+args[0]+"\"}}"
+		
+		
+		fmt.Printf("- computeIncentiveDealer query is:\n%s\n", query)
+		
+		 resultsIterator, err := APIstub.GetQueryResult(query)
+	if err != nil {
+		return shim.Error("Error occurred")
+	}
+	if resultsIterator == nil {
+		return shim.Error("No record found")
+	}
+		
+		
+		defer resultsIterator.Close()
+		
+		var buffer bytes.Buffer
+	
+	buffer.WriteString("[")
+	bArrayMemberAlreadyWritten := false
+	
+	for resultsIterator.HasNext() {
+		
+		queryResponse, err := resultsIterator.Next()
+		if err != nil {
+			return  shim.Error("No more record ")
+		}
+		// Add a comma before array members, suppress it for the first array member
+		if bArrayMemberAlreadyWritten == true {
+			buffer.WriteString(",")
+		}
+		buffer.WriteString("{\"Key\":")
+		buffer.WriteString("\"")
+		buffer.WriteString(queryResponse.Key)
+		fmt.Printf("- computeIncentiveDealer key is:\n%s\n", queryResponse.Key)
+		buffer.WriteString("\"")
+
+		buffer.WriteString(", \"Record\":")
+		
+		
+		var co map[string]interface {}
+		jsonData := queryResponse.Value
+		json.Unmarshal(jsonData, &co)
+		var slabs []interface{}
+		var aString []map[string]interface{}
+		
+		
+		
+		
+		fmt.Println("computeIncentiveDealer dealerType: \n%s\n", co["dealerType"].(string)) 
+		data := strings.Split(co["dealerType"].(string), ",")
+		for _,key :=range data {
+				fmt.Println("computeIncentiveDealer dealerType key is: \n%s\n", key)
+				fmt.Println("computeIncentiveDealer dealerType key args: \n%s\n", args[1])
+		if(key==args[1]) {
+			var sch map[string]interface {}
+		sch=co["incentive"].(map[string]interface {})
+		fmt.Println("computeIncentiveDealer calculationBasis is: \n%s", sch["calculationBasis"]) 
+		fmt.Println("computeIncentiveDealer schemeBasis is: \n%s", sch["schemeBasis"]) 
+			
+		calculationBasis:= fmt.Sprintf("%v", sch["calculationBasis"]) 
+		schemeBasis:= fmt.Sprintf("%v", sch["schemeBasis"]) 
+		
+		slabs = sch["incentiveSlab"].([]interface{})
+		fmt.Println("slabs data is: \n%s\n", slabs)
+		aString = make([]map[string]interface{}, len(slabs))
+		 for i, v := range slabs {
+  			  aString[i] = v.(map[string]interface{})
+			}
+		 if schemeBasis == "Volume" {
+		  if calculationBasis == "Fixed" {
+			tx_number, _:= strconv.Atoi(args[2])  
+   			
+   			for kg, slab := range aString {
+      					  fmt.Println("slab data is: \n%s\n", slab)
+      					   fmt.Println("slab key is: \n%s\n", kg)
+      					   fmt.Println("slab string is: \n%s\n", aString)
+      					  lowerLimit,_:=strconv.Atoi(fmt.Sprintf("%v", slab["activationFrom"]))
+      					  upperLimit,_:=strconv.Atoi(fmt.Sprintf("%v",slab["activationTo"]))
+      					  valueRec,_:=strconv.Atoi(fmt.Sprintf("%v",slab["value"]))
+      					  valueRec_str := strconv.Itoa(valueRec)
+      					  if tx_number >= lowerLimit && tx_number <= upperLimit {
+      					  scheme ="{\"incentive\":\""+valueRec_str+"\"}"
+      					  }
+   					 }
+   			
+		   } else if calculationBasis == "Percentage" {
+		   tx_number, _:= strconv.Atoi(args[2]) 
+	
+   			for _, slab := range aString {
+      					  fmt.Println("slab data is: \n%s\n", slab)
+      					  lowerLimit,_:=strconv.Atoi(fmt.Sprintf("%v",slab["activationFrom"]))
+      					  upperLimit,_:=strconv.Atoi(fmt.Sprintf("%v",slab["activationTo"]))
+      					  valueRec,_:=strconv.Atoi(fmt.Sprintf("%v",slab["value"]))
+      					  if tx_number >= lowerLimit && tx_number <= upperLimit {
+      					  salTm,_:=strconv.ParseFloat(args[3], 32)
+						  inc:= (float64(valueRec)/float64(100)) * float64(salTm)
+						  valueRec_str := fmt.Sprintf("%.2f", inc)
+      					  scheme ="{\"incentive\":\""+valueRec_str+"\"}"
+      					  }
+   					 }
+		    } 
+		}else if schemeBasis == "Revenue" {
+		totalSale, _:= strconv.Atoi(args[3])
+		 if calculationBasis == "Fixed" {
+			
+   			for _, slab := range aString {
+      					  fmt.Println("slab data is: \n%s\n", slab)
+      					  lowerLimit,_:=strconv.Atoi(fmt.Sprintf("%v",slab["activationFrom"]))
+      					  upperLimit,_:=strconv.Atoi(fmt.Sprintf("%v",slab["activationTo"]))
+      					  valueRec,_:=strconv.Atoi(fmt.Sprintf("%v",slab["value"]))
+      					  valueRec_str := strconv.Itoa(valueRec)
+      					  if totalSale >= lowerLimit && totalSale <= upperLimit {
+      					  scheme ="{\"incentive\":\""+valueRec_str+"\"}"
+      					  }
+   					 }
+   			
+		 } else if calculationBasis == "Percentage" {
+		
+   			for _, slab := range aString {
+      					  fmt.Println("slab data is: \n%s\n", slab)
+      					  lowerLimit,_:=strconv.Atoi(fmt.Sprintf("%v",slab["activationFrom"]))
+      					  upperLimit,_:=strconv.Atoi(fmt.Sprintf("%v",slab["activationTo"]))
+      					  valueRec,_:=strconv.Atoi(fmt.Sprintf("%v",slab["value"]))
+      					  if totalSale >= lowerLimit && totalSale <= upperLimit {
+      					  saleamt,_ := strconv.ParseFloat(args[3], 32)
+						  inc:= (float64(valueRec)/float64(100)) * float64(saleamt)
+						  
+						  valueRec_str := fmt.Sprintf("%.2f", inc)
+      					  scheme ="{\"incentive\":\""+valueRec_str+"\"}"
+      					  }
+   					 }
+             }
+          }		
+		
+		} else{
+		continue
+		}
+		
+		
+		return shim.Success([]byte(scheme))
+		}
+	}
+	return shim.Success([]byte("No scheme"))
+}
+		
+	
+
+// The main function is only relevant in unit test mode. Only included here for completeness.
+func main() {
+
+  // Create a new Smart Contract
+  err := shim.Start(new(SmartContract))
+  if err != nil {
+    fmt.Printf("Error creating new Smart Contract: %s", err)
+  }
+}
